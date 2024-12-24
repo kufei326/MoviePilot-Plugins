@@ -76,7 +76,9 @@ class ANiStrm(_PluginBase):
     _cron = None
     _onlyonce = False
     _fulladd = False
+    _historical = False
     _storageplace = None
+    _date = None
 
     # 定时器
     _scheduler: Optional[BackgroundScheduler] = None
@@ -90,8 +92,10 @@ class ANiStrm(_PluginBase):
             self._cron = config.get("cron")
             self._onlyonce = config.get("onlyonce")
             self._fulladd = config.get("fulladd")
+            self._historical = config.get("historical")
             self._storageplace = config.get("storageplace")
-            # 加载模块
+
+        # 加载模块
         if self._enabled or self._onlyonce:
             # 定时服务
             self._scheduler = BackgroundScheduler(timezone=settings.TZ)
@@ -99,20 +103,30 @@ class ANiStrm(_PluginBase):
             if self._enabled and self._cron:
                 try:
                     self._scheduler.add_job(func=self.__task,
-                                            trigger=CronTrigger.from_crontab(self._cron),
-                                            name="ANiStrm文件创建")
+                                          trigger=CronTrigger.from_crontab(self._cron),
+                                          name="ANiStrm文件创建")
                     logger.info(f'ANi-Strm定时任务创建成功：{self._cron}')
                 except Exception as err:
                     logger.error(f"定时任务配置错误：{str(err)}")
 
             if self._onlyonce:
                 logger.info(f"ANi-Strm服务启动，立即运行一次")
-                self._scheduler.add_job(func=self.__task, args=[self._fulladd], trigger='date',
-                                        run_date=datetime.now(tz=pytz.timezone(settings.TZ)) + timedelta(seconds=3),
-                                        name="ANiStrm文件创建")
-                # 关闭一次性开关 全量转移
+                if self._historical:
+                    self._scheduler.add_job(func=self.__task,
+                                          args=[False, True],
+                                          trigger='date',
+                                          run_date=datetime.now(tz=pytz.timezone(settings.TZ)) + timedelta(seconds=3),
+                                          name="ANiStrm历史文件创建")
+                else:
+                    self._scheduler.add_job(func=self.__task,
+                                          args=[self._fulladd, False],
+                                          trigger='date',
+                                          run_date=datetime.now(tz=pytz.timezone(settings.TZ)) + timedelta(seconds=3),
+                                          name="ANiStrm文件创建")
+                # 关闭一次性开关
                 self._onlyonce = False
                 self._fulladd = False
+                self._historical = False
             self.__update_config()
 
             # 启动任务
@@ -120,30 +134,84 @@ class ANiStrm(_PluginBase):
                 self._scheduler.print_jobs()
                 self._scheduler.start()
 
-    def __get_ani_season(self, idx_month: int = None) -> str:
+    def __get_ani_season(self, year: int = None, month: int = None) -> str:
+        """
+        获取指定年月的季度
+        :param year: 年份
+        :param month: 月份
+        :return: 季度字符串，格式：YYYY-MM
+        """
+        if year is None or month is None:
+            current_date = datetime.now()
+            year = current_date.year
+            month = current_date.month
+        
+        for m in range(month, 0, -1):
+            if m in [10, 7, 4, 1]:
+                self._date = f'{year}-{m}'
+                return f'{year}-{m}'
+        return f'{year}-1'  # 如果没有找到匹配的季度，返回当年第一季
+
+    def get_all_seasons_since_2019(self) -> List[str]:
+        """
+        获取从2019年1月到当前的所有季度
+        :return: 季度列表
+        """
+        seasons = []
         current_date = datetime.now()
         current_year = current_date.year
-        current_month = idx_month if idx_month else current_date.month
-        for month in range(current_month, 0, -1):
-            if month in [10, 7, 4, 1]:
-                self._date = f'{current_year}-{month}'
-                return f'{current_year}-{month}'
+        current_month = current_date.month
+        
+        # 从当前年份往回遍历到2019年
+        for year in range(current_year, 2018, -1):
+            # 确定月份范围
+            end_month = 12
+            if year == current_year:
+                end_month = current_month
+            
+            # 获取每个季度
+            for month in [10, 7, 4, 1]:
+                if year == 2019 and month < 1:
+                    continue
+                if year == current_year and month > end_month:
+                    continue
+                seasons.append(f'{year}-{month}')
+        
+        return seasons
 
     @retry(Exception, tries=3, logger=logger, ret=[])
     def get_current_season_list(self) -> List:
         url = f'https://openani.an-i.workers.dev/{self.__get_ani_season()}/'
 
         rep = RequestUtils(ua=settings.USER_AGENT if settings.USER_AGENT else None,
-                           proxies=settings.PROXY if settings.PROXY else None).post(url=url)
+                         proxies=settings.PROXY if settings.PROXY else None).post(url=url)
         logger.debug(rep.text)
         files_json = rep.json()['files']
         return [file['name'] for file in files_json]
+
+    def get_historical_season_list(self, season: str) -> List:
+        """
+        获取指定季度的动画列表
+        :param season: 季度字符串，格式：YYYY-MM
+        :return: 文件名列表
+        """
+        url = f'https://openani.an-i.workers.dev/{season}/'
+        try:
+            rep = RequestUtils(
+                ua=settings.USER_AGENT if settings.USER_AGENT else None,
+                proxies=settings.PROXY if settings.PROXY else None
+            ).post(url=url)
+            files_json = rep.json()['files']
+            return [file['name'] for file in files_json]
+        except Exception as e:
+            logger.error(f"获取 {season} 季度列表失败: {str(e)}")
+            return []
 
     @retry(Exception, tries=3, logger=logger, ret=[])
     def get_latest_list(self) -> List:
         addr = 'https://api.ani.rip/ani-download.xml'
         ret = RequestUtils(ua=settings.USER_AGENT if settings.USER_AGENT else None,
-                           proxies=settings.PROXY if settings.PROXY else None).get_res(addr)
+                         proxies=settings.PROXY if settings.PROXY else None).get_res(addr)
         ret_xml = ret.text
         ret_array = []
         # 解析XML
@@ -179,22 +247,48 @@ class ANiStrm(_PluginBase):
             logger.error('创建strm源文件失败：' + str(e))
             return False
 
-    def __task(self, fulladd: bool = False):
+    def __task(self, fulladd: bool = False, historical: bool = False):
+        """
+        任务执行函数
+        :param fulladd: 是否全量添加当季
+        :param historical: 是否获取历史数据
+        """
         cnt = 0
-        # 增量添加更新
-        if not fulladd:
-            rss_info_list = self.get_latest_list()
-            logger.info(f'本次处理 {len(rss_info_list)} 个文件')
-            for rss_info in rss_info_list:
-                if self.__touch_strm_file(file_name=rss_info['title'], file_url=rss_info['link']):
-                    cnt += 1
-        # 全量添加当季
+        
+        if historical:
+            # 获取所有季度
+            seasons = self.get_all_seasons_since_2019()
+            logger.info(f'开始处理从2019年至今的所有季度: {len(seasons)} 个季度')
+            
+            for season in seasons:
+                logger.info(f'正在处理季度: {season}')
+                self._date = season
+                name_list = self.get_historical_season_list(season)
+                if not name_list:
+                    continue
+                    
+                logger.info(f'季度 {season} 包含 {len(name_list)} 个文件')
+                for file_name in name_list:
+                    if self.__touch_strm_file(file_name=file_name):
+                        cnt += 1
+                        
+                # 添加短暂延迟避免请求过于频繁
+                time.sleep(1)
         else:
-            name_list = self.get_current_season_list()
-            logger.info(f'本次处理 {len(name_list)} 个文件')
-            for file_name in name_list:
-                if self.__touch_strm_file(file_name=file_name):
-                    cnt += 1
+            # 原有的增量或当季全量逻辑
+            if not fulladd:
+                rss_info_list = self.get_latest_list()
+                logger.info(f'本次处理 {len(rss_info_list)} 个文件')
+                for rss_info in rss_info_list:
+                    if self.__touch_strm_file(file_name=rss_info['title'], file_url=rss_info['link']):
+                        cnt += 1
+            else:
+                name_list = self.get_current_season_list()
+                logger.info(f'本次处理 {len(name_list)} 个文件')
+                for file_name in name_list:
+                    if self.__touch_strm_file(file_name=file_name):
+                        cnt += 1
+                        
         logger.info(f'新创建了 {cnt} 个strm文件')
 
     def get_state(self) -> bool:
@@ -265,7 +359,23 @@ class ANiStrm(_PluginBase):
                                         }
                                     }
                                 ]
-                            }
+                            },
+                            {
+                                'component': 'VCol',
+                                'props': {
+                                    'cols': 12,
+                                    'md': 4
+                                },
+                                'content': [
+                                    {
+                                        'component': 'VSwitch',
+                                        'props': {
+                                            'model': 'historical',
+                                            'label': '获取历史数据(2019年至今)',
+                                        }
+                                    }
+                                ]</antArtifact>
+                                }
                         ]
                     },
                     {
@@ -347,6 +457,7 @@ class ANiStrm(_PluginBase):
             "enabled": False,
             "onlyonce": False,
             "fulladd": False,
+            "historical": False,
             "storageplace": '/downloads/strm',
             "cron": "*/20 22,23,0,1 * * *",
         }
@@ -357,6 +468,7 @@ class ANiStrm(_PluginBase):
             "cron": self._cron,
             "enabled": self._enabled,
             "fulladd": self._fulladd,
+            "historical": self._historical,
             "storageplace": self._storageplace,
         })
 
