@@ -224,33 +224,49 @@ class ANiStrm(_PluginBase):
             return False
 
     def __task(self, fulladd: bool = False):
-        total_cnt = 0
+    total_cnt = 0
+
+    # 增量添加更新
+    if not fulladd:
+        # 获取当前季节
+        current_date = datetime.now()
+        current_month = current_date.month
         
-        # 增量添加更新
-        if not fulladd:
-            rss_info_list = self.get_latest_list()
-            logger.info(f'本次处理 {len(rss_info_list)} 个最新文件')
-            for rss_info in rss_info_list:
-                if self.__touch_strm_file(file_name=rss_info['title'], file_url=rss_info['link']):
-                    total_cnt += 1
-        
-        # 全量添加历史季度
+        # 找到当前季度的起始月份
+        if current_month >= 10:
+            current_season = f'{current_date.year}-10'
+        elif current_month >= 7:
+            current_season = f'{current_date.year}-7'
+        elif current_month >= 4:
+            current_season = f'{current_date.year}-4'
         else:
-            seasons = self.__get_all_seasons()
-            for season in seasons:
-                logger.info(f'正在处理 {season} 季度...')
-                name_list = self.get_season_list(season)
-                logger.info(f'获取到 {len(name_list)} 个文件')
-                season_cnt = 0
-                for file_name in name_list:
-                    if self.__touch_strm_file(file_name=file_name, season=season):
-                        season_cnt += 1
-                        total_cnt += 1
-                logger.info(f'{season} 季度完成，新增 {season_cnt} 个文件')
-                # 添加延迟，避免请求过快
-                time.sleep(1)
-                
-        logger.info(f'任务完成，总共新创建了 {total_cnt} 个strm文件')
+            current_season = f'{current_date.year}-1'
+
+        # 获取当前季节的文件列表
+        rss_info_list = self.get_season_list(current_season)  # 将当前季度传入
+        logger.info(f'本次处理 {len(rss_info_list)} 个最新文件')
+        for rss_info in rss_info_list:
+            if self.__touch_strm_file(file_name=rss_info['title'], file_url=rss_info['link'], season=current_season):
+                total_cnt += 1
+
+    # 全量添加历史季度
+    else:
+        seasons = self.__get_all_seasons()
+        for season in seasons:
+            logger.info(f'正在处理 {season} 季度...')
+            name_list = self.get_season_list(season)
+            logger.info(f'获取到 {len(name_list)} 个文件')
+            season_cnt = 0
+            for file_name in name_list:
+                if self.__touch_strm_file(file_name=file_name, season=season):
+                    season_cnt += 1
+                    total_cnt += 1
+            logger.info(f'{season} 季度完成，新增 {season_cnt} 个文件')
+            # 添加延迟，避免请求过快
+            time.sleep(1)
+
+    logger.info(f'任务完成，总共新创建了 {total_cnt} 个strm文件')
+
 
     def get_state(self) -> bool:
         return self._enabled
