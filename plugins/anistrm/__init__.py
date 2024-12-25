@@ -152,7 +152,7 @@ class ANiStrm(_PluginBase):
             month = 1 if year == start_year else 1
             while month <= end_month:
                 if month in [1, 4, 7, 10]:
-                    seasons.append(f'{year}-{month:02d}')
+                    seasons.append(f'{year}-{month}')
                 month += 1
             year += 1
 
