@@ -374,8 +374,8 @@ class ANiStrm(_PluginBase):
                                             'label': '获取历史数据(2019年至今)',
                                         }
                                     }
-                                ]</antArtifact>
-                                }
+                                ]
+                                },
                         ]
                     },
                     {
