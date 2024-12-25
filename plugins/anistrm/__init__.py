@@ -332,7 +332,7 @@ class ANiStrm(_PluginBase):
                                         'component': 'VSwitch',
                                         'props': {
                                             'model': 'fulladd',
-                                            'label': '下次创建当前季度所有番剧strm',
+                                            'label': '创建所有番剧strm',
                                         }
                                     }
                                 ]
