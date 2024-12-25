@@ -208,7 +208,7 @@ class ANiStrm(_PluginBase):
         else:
             src_url = file_url
         
-        file_path = f'{self._storageplace}/{file_name}.strm'
+        file_path = f'{self._storageplace}/{season}/{file_name}.strm'
         if os.path.exists(file_path):
             logger.debug(f'{file_name}.strm 文件已存在')
             return False
