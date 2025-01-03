@@ -58,7 +58,7 @@ class ANiStrm(_PluginBase):
     # 插件图标
     plugin_icon = "https://raw.githubusercontent.com/honue/MoviePilot-Plugins/main/icons/anistrm.png"
     # 插件版本
-    plugin_version = "2.4.3"
+    plugin_version = "2.4.4"
     # 插件作者
     plugin_author = "honue"
     # 作者主页
@@ -163,7 +163,7 @@ class ANiStrm(_PluginBase):
         """
         获取指定季度的番剧列表
         """
-        url = f'https://openani.an-i.workers.dev/{season}/'
+        url = f'https://ani.kuyun.org/{season}/'
         rep = RequestUtils(ua=settings.USER_AGENT if settings.USER_AGENT else None,
                          proxies=settings.PROXY if settings.PROXY else None).post(url=url)
         if rep.status_code != 200:
@@ -195,7 +195,7 @@ class ANiStrm(_PluginBase):
             # 链接
             link = DomUtils.tag_value(item, "link", default="")
             rss_info['title'] = title
-            rss_info['link'] = link.replace("resources.ani.rip", "openani.an-i.workers.dev")
+            rss_info['link'] = link.replace("resources.ani.rip", "ani.kuyun.org")
             ret_array.append(rss_info)
         return ret_array
 
@@ -204,7 +204,7 @@ class ANiStrm(_PluginBase):
         创建strm文件
         """
         if not file_url:
-            src_url = f'https://openani.an-i.workers.dev/{season}/{file_name}?d=true'
+            src_url = f'https://ani.kuyun.org/{season}/{file_name}?d=true'
         else:
             src_url = file_url
         
