@@ -34,9 +34,9 @@ class CloudStrm(_PluginBase):
     # 插件版本
     plugin_version = "6.3.0"
     # 插件作者
-    plugin_author = "thsrite (Optimized by Rovo Dev)"
+    plugin_author = "kufei326"
     # 作者主页
-    author_url = "https://github.com/kufei365"
+    author_url = "https://github.com/kufei326"
     # 插件配置项ID前缀
     plugin_config_prefix = "cloudstrm_"
     # 加载顺序
