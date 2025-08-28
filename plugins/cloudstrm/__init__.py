@@ -32,7 +32,7 @@ class CloudStrm(_PluginBase):
     # 插件图标
     plugin_icon = "https://raw.githubusercontent.com/thsrite/MoviePilot-Plugins/main/icons/create.png"
     # 插件版本
-    plugin_version = "6.2.0"
+    plugin_version = "6.3.0"
     # 插件作者
     plugin_author = "thsrite (Optimized by Rovo Dev)"
     # 作者主页
@@ -292,11 +292,162 @@ class CloudStrm(_PluginBase):
         except Exception as e:
             logger.error("退出插件失败：%s" % str(e))
     
-    # 保留以下方法为空，因为此插件不再直接与MP事件交互
     @eventmanager.register(EventType.PluginAction)
-    def cloudstrm_file(self, event: Event = None): pass
-    def get_state(self) -> bool: return self._enabled
-    def get_command(self) -> List[Dict[str, Any]]: return []
-    def get_service(self) -> List[Dict[str, Any]]: return []
-    def get_api(self) -> List[Dict[str, Any]]: pass
-    def get_page(self) -> List[dict]: pass
+    def cloudstrm_file(self, event: Event = None):
+        """
+        处理插件动作事件
+        """
+        if event:
+            event_data = event.event_data
+            if not event_data or event_data.get("action") != "cloudstrm":
+                return
+            
+            action_type = event_data.get("type")
+            if action_type == "scan_now":
+                logger.info("收到立即扫描命令，开始执行...")
+                self.scan_all_confs()
+            elif action_type == "rebuild_index":
+                logger.info("收到重建索引命令，将在下次扫描时生效...")
+                self._rebuild = True
+                self.__update_config()
+                self.systemmessage.put("重建索引已设置，将在下次扫描时生效")
+
+    def get_state(self) -> bool:
+        return self._enabled
+
+    def get_command(self) -> List[Dict[str, Any]]:
+        """
+        定义插件命令
+        """
+        return [
+            {
+                "action": "cloudstrm",
+                "name": "立即扫描",
+                "type": "scan_now",
+                "description": "立即执行一次云盘扫描并生成strm文件"
+            },
+            {
+                "action": "cloudstrm", 
+                "name": "重建索引",
+                "type": "rebuild_index",
+                "description": "重建已处理文件索引，下次扫描时将处理所有文件"
+            }
+        ]
+
+    def get_service(self) -> List[Dict[str, Any]]:
+        """
+        定义插件服务
+        """
+        if self._enabled and self._scheduler and self._scheduler.running:
+            return [
+                {
+                    "id": "cloudstrm_scan",
+                    "name": "云盘Strm扫描服务",
+                    "type": "scheduler",
+                    "status": True
+                }
+            ]
+        return []
+
+    def get_api(self) -> List[Dict[str, Any]]:
+        """
+        定义插件API
+        """
+        return [
+            {
+                "path": "/scan",
+                "endpoint": self.api_scan,
+                "methods": ["POST"],
+                "summary": "立即扫描",
+                "description": "立即执行一次云盘扫描"
+            },
+            {
+                "path": "/status",
+                "endpoint": self.api_status,
+                "methods": ["GET"],
+                "summary": "获取状态",
+                "description": "获取插件运行状态和统计信息"
+            },
+            {
+                "path": "/rebuild",
+                "endpoint": self.api_rebuild,
+                "methods": ["POST"],
+                "summary": "重建索引",
+                "description": "重建已处理文件索引"
+            }
+        ]
+
+    def get_page(self) -> List[dict]:
+        """
+        定义插件页面
+        """
+        return [
+            {
+                "component": "div",
+                "text": "云盘Strm生成插件",
+                "props": {
+                    "class": "text-center"
+                }
+            }
+        ]
+
+    def api_scan(self):
+        """
+        API: 立即扫描
+        """
+        try:
+            if not self._enabled:
+                return {"code": 400, "message": "插件未启用"}
+            
+            # 在后台执行扫描
+            if self._scheduler:
+                self._scheduler.add_job(
+                    func=self.scan_all_confs,
+                    trigger='date',
+                    run_date=datetime.now(tz=pytz.timezone(settings.TZ)) + timedelta(seconds=1),
+                    name="API触发扫描"
+                )
+                return {"code": 0, "message": "扫描任务已启动"}
+            else:
+                return {"code": 500, "message": "调度器未运行"}
+        except Exception as e:
+            logger.error(f"API扫描失败: {e}")
+            return {"code": 500, "message": f"扫描失败: {str(e)}"}
+
+    def api_status(self):
+        """
+        API: 获取状态
+        """
+        try:
+            status = {
+                "enabled": self._enabled,
+                "cron": self._cron,
+                "processed_files_count": len(self._processed_files),
+                "scheduler_running": self._scheduler.running if self._scheduler else False,
+                "jobs": []
+            }
+            
+            if self._scheduler:
+                for job in self._scheduler.get_jobs():
+                    status["jobs"].append({
+                        "id": job.id,
+                        "name": job.name,
+                        "next_run": job.next_run_time.isoformat() if job.next_run_time else None
+                    })
+            
+            return {"code": 0, "data": status}
+        except Exception as e:
+            logger.error(f"获取状态失败: {e}")
+            return {"code": 500, "message": f"获取状态失败: {str(e)}"}
+
+    def api_rebuild(self):
+        """
+        API: 重建索引
+        """
+        try:
+            self._rebuild = True
+            self.__update_config()
+            return {"code": 0, "message": "重建索引已设置，将在下次扫描时生效"}
+        except Exception as e:
+            logger.error(f"设置重建索引失败: {e}")
+            return {"code": 500, "message": f"设置重建索引失败: {str(e)}"}
