@@ -345,7 +345,7 @@ class CloudStrm(_PluginBase):
                     "name": "云盘Strm扫描服务",
                     "type": "scheduler",
                     "status": True,
-                    "func": self.scan
+                    "func": self.scan_all_confs
                 }
             ]
         return []
