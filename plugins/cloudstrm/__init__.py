@@ -32,7 +32,7 @@ class CloudStrm(_PluginBase):
     # 插件图标
     plugin_icon = "https://raw.githubusercontent.com/thsrite/MoviePilot-Plugins/main/icons/create.png"
     # 插件版本
-    plugin_version = "6.1.0"
+    plugin_version = "6.2.0"
     # 插件作者
     plugin_author = "thsrite (Optimized by Rovo Dev)"
     # 作者主页
@@ -211,18 +211,7 @@ class CloudStrm(_PluginBase):
                         )
                     elif self._copy_files:
                         # 是辅助文件且开启了复制
-                        # 获取文件的完整路径
-                        full_file_path = f"{current_alist_path}/{item_name}"
-                        # 获取raw_url用于下载
-                        raw_url = self.get_file_raw_url(alist_url, alist_token, scheme, full_file_path)
-                        if raw_url:
-                            self.download_aux_file_from_api(
-                                target_dir=target_dir,
-                                relative_path=item_path,
-                                raw_url=raw_url
-                            )
-                        else:
-                            logger.error(f"无法获取文件的raw_url: {item_path}")
+                        logger.warning(f"辅助文件复制功能已移除，跳过文件: {item_path}")
                     else:
                         logger.debug(f"跳过非媒体文件: {item_path}")
                 
@@ -234,30 +223,6 @@ class CloudStrm(_PluginBase):
         except Exception as e:
             logger.error(f"在处理路径 '{current_alist_path}' 时发生未知错误: {type(e).__name__} - {e}")
 
-    def get_file_raw_url(self, alist_url: str, alist_token: str, scheme: str, file_path: str):
-        """
-        获取文件的raw_url，使用/api/fs/get端点
-        """
-        api_endpoint = f"{scheme}://{alist_url}/api/fs/get"
-        headers = {"Authorization": alist_token}
-        payload = {"path": file_path}
-        
-        try:
-            response = requests.post(api_endpoint, json=payload, headers=headers, timeout=30)
-            response.raise_for_status()
-            data = response.json()
-            
-            if data.get("code") == 200:
-                return data.get("data", {}).get("raw_url")
-            else:
-                logger.error(f"获取文件raw_url失败 '{file_path}': {data.get('message')}")
-                return None
-        except requests.exceptions.RequestException as e:
-            logger.error(f"请求文件raw_url失败 '{file_path}': {e}")
-            return None
-        except Exception as e:
-            logger.error(f"获取文件raw_url时发生未知错误 '{file_path}': {e}")
-            return None
 
     def create_strm_file_from_api(self, target_dir: str, relative_path: str, strm_link: str):
         """
@@ -277,29 +242,6 @@ class CloudStrm(_PluginBase):
         except IOError as e:
             logger.error(f"写入 strm 文件失败: {strm_file_path} - {e}")
             
-    def download_aux_file_from_api(self, target_dir: str, relative_path: str, raw_url: str):
-        """
-        下载辅助文件 (nfo, jpg, etc.)
-        """
-        local_file_path = os.path.join(target_dir, relative_path)
-        
-        try:
-            # 确保目录存在
-            os.makedirs(os.path.dirname(local_file_path), exist_ok=True)
-
-            logger.info(f"正在下载辅助文件: {raw_url} -> {local_file_path}")
-            response = requests.get(raw_url, stream=True, timeout=60)
-            response.raise_for_status()
-            
-            with open(local_file_path, 'wb') as f:
-                for chunk in response.iter_content(chunk_size=8192):
-                    f.write(chunk)
-            
-            logger.info(f"成功下载辅助文件: {local_file_path}")
-        except requests.exceptions.RequestException as e:
-            logger.error(f"下载辅助文件失败: {raw_url} - {e}")
-        except IOError as e:
-            logger.error(f"保存辅助文件失败: {local_file_path} - {e}")
             
     def save_processed_files(self):
         """保存已处理的文件列表到json"""
