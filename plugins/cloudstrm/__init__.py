@@ -32,7 +32,7 @@ class CloudStrm(_PluginBase):
     # 插件图标
     plugin_icon = "https://raw.githubusercontent.com/thsrite/MoviePilot-Plugins/main/icons/create.png"
     # 插件版本
-    plugin_version = "6.3.0"
+    plugin_version = "6.4.0"
     # 插件作者
     plugin_author = "kufei326"
     # 作者主页
